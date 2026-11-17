@@ -1,3 +1,4 @@
+
 package com.example.xeevpairing.data
 
 import com.google.gson.JsonNull
@@ -11,143 +12,232 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /**
- * Client for the legacy XEEV pairing flow verified against an authorised test account.
- * The playlist endpoint returns private channel URLs; callers must never log or export them.
+ * Client for the legacy XEEV pairing flow.
+ * Playlist URLs and IDs must be kept private.
  */
 class XeevRepository(
     private val http: OkHttpClient = defaultClient()
 ) {
+
     fun register(deviceId: String): RegistrationResult {
         val body = FormBody.Builder()
             .add("deviceid", deviceId)
             .build()
+
         val request = Request.Builder()
             .url("$XEEV_BASE/apk/get/newappid")
             .post(body)
             .header("Accept", "application/json")
             .build()
+
         val json = executeJson(request, "XEEV registration")
+
         val result = json.getAsJsonObject("xresult")
-            ?: throw IOException("XEEV registration response did not contain xresult")
+            ?: throw IOException(
+                "XEEV registration response did not contain xresult"
+            )
+
         val appCode = result.stringValue("appid")
             ?.trim()
             ?.takeIf { it.isNotEmpty() }
-            ?: throw IOException("XEEV registration response did not contain an app code")
+            ?: throw IOException(
+                "XEEV registration response did not contain an app code"
+            )
+
         return RegistrationResult(
             appCode = appCode,
-            qrImageUrl = result.stringValue("qrcode")?.takeIf { it.startsWith("https://") },
+            qrImageUrl = result.stringValue("qrcode")
+                ?.takeIf { it.startsWith("https://") },
             server = result.stringValue("server")
         )
     }
 
-    /** Returns the paired 32-character playlist ID, or null while not paired. */
-    fun checkPairing(appCode: String, deviceId: String, appVersion: String = XEEV_APP_VERSION): String? {
+    /**
+     * Returns the paired 32-character playlist ID,
+     * or null while the app code is not paired.
+     */
+    fun checkPairing(
+        appCode: String,
+        deviceId: String,
+        appVersion: String = XEEV_APP_VERSION
+    ): String? {
+
         val body = FormBody.Builder()
             .add("version", appVersion)
             .add("deviceid", deviceId)
             .add("wakeup", "0")
             .build()
+
         val request = Request.Builder()
             .url("$XEEV_BASE/apk/get/settings/${appCode.trim()}")
             .post(body)
             .header("Accept", "application/json")
             .build()
-val json = executeJson(request, "XEEV pairing check")
 
-val xresult = json.get("xresult")
-    ?: throw IOException(
-        "XEEV response has no xresult field. Fields: ${json.keySet().joinToString()}"
-    )
+        val json = executeJson(request, "XEEV pairing check")
 
-if (xresult.isJsonNull || !xresult.isJsonObject) {
-    throw IOException("XEEV response xresult is not an object")
-}
+        val xresult = json.get("xresult")
+            ?: throw IOException(
+                "XEEV response has no xresult field. " +
+                    "Fields: ${json.keySet().joinToString()}"
+            )
 
-val result = xresult.asJsonObject
+        if (xresult.isJsonNull || !xresult.isJsonObject) {
+            throw IOException(
+                "XEEV response xresult is not an object"
+            )
+        }
 
-val lineId = result.stringValue("lineid")?.trim()
-    ?: throw IOException(
-        "XEEV response has no lineid field. Fields: ${result.keySet().joinToString()}"
-    )
+        val result = xresult.asJsonObject
 
-if (lineId.isBlank() || lineId == "0") return null
+        val lineId = result.stringValue("lineid")?.trim()
+            ?: throw IOException(
+                "XEEV response has no lineid field. " +
+                    "Fields: ${result.keySet().joinToString()}"
+            )
 
-if (!isValidPlaylistId(lineId)) {
-    throw IOException(
-        "XEEV returned an unexpected lineid format " +
-        "(length=${lineId.length}, hexadecimal=${lineId.matches(Regex("^[A-Za-z0-9]+$"))})"
-    )
-}
+        if (lineId.isBlank() || lineId == "0") {
+            return null
+        }
 
-return lineId
+        if (!isValidPlaylistId(lineId)) {
+            throw IOException(
+                "XEEV returned an unexpected lineid format " +
+                    "(length=${lineId.length}, " +
+                    "alphanumeric=${lineId.matches(Regex("^[A-Za-z0-9]+$"))})"
+            )
+        }
+
+        return lineId
     }
 
-    /** Downloads the XEEV text playlist containing the real playback links. */
+    /**
+     * Downloads the XEEV text playlist containing
+     * the actual channel playback URLs.
+     */
     fun downloadPlaylist(playlistId: String): String {
-        require(isValidPlaylistId(playlistId)) { "Playlist ID is not valid" }
-        val url = XEEV_BASE.toHttpUrl().newBuilder()
+
+        require(isValidPlaylistId(playlistId)) {
+            "Playlist ID is not valid"
+        }
+
+        val url = XEEV_BASE.toHttpUrl()
+            .newBuilder()
             .addPathSegment("load")
             .addPathSegment("apk")
             .addPathSegment(playlistId)
             .build()
+
         val request = Request.Builder()
             .url(url)
             .get()
             .header("Accept", "text/plain, */*")
             .build()
+
         http.newCall(request).execute().use { response ->
+
             if (!response.isSuccessful) {
-                throw IOException("Playlist download failed (HTTP ${response.code})")
+                throw IOException(
+                    "Playlist download failed (HTTP ${response.code})"
+                )
             }
+
             val text = response.body?.string()
-                ?: throw IOException("XEEV returned an empty playlist")
-            val normalizedStart = text.trimStart('\uFEFF', '\r', '\n', ' ')
-            if (!normalizedStart.startsWith("#PL") && !normalizedStart.contains("\n#CAT") && !normalizedStart.contains("\n#CHAN")) {
-                throw IOException("The XEEV response does not look like a supported playlist")
+                ?: throw IOException(
+                    "XEEV returned an empty playlist"
+                )
+
+            val normalizedStart = text.trimStart(
+                '\uFEFF',
+                '\r',
+                '\n',
+                ' '
+            )
+
+            if (
+                !normalizedStart.startsWith("#PL") &&
+                !normalizedStart.contains("\n#CAT") &&
+                !normalizedStart.contains("\n#CHAN")
+            ) {
+                throw IOException(
+                    "The XEEV response does not look like a supported playlist"
+                )
             }
+
             return text
         }
     }
 
-    private fun executeJson(request: Request, operation: String): JsonObject {
+    private fun executeJson(
+        request: Request,
+        operation: String
+    ): JsonObject {
+
         http.newCall(request).execute().use { response ->
+
             if (!response.isSuccessful) {
-                throw IOException("$operation failed (HTTP ${response.code})")
+                throw IOException(
+                    "$operation failed (HTTP ${response.code})"
+                )
             }
+
             val text = response.body?.string()
-                ?: throw IOException("$operation returned an empty response")
+                ?: throw IOException(
+                    "$operation returned an empty response"
+                )
+
             val root = try {
                 JsonParser.parseString(text).asJsonObject
             } catch (_: Exception) {
-                throw IOException("$operation returned invalid JSON")
+                throw IOException(
+                    "$operation returned invalid JSON"
+                )
             }
+
             return root
         }
     }
 
     private fun JsonObject.stringValue(name: String): String? {
         val value = get(name) ?: return null
-        if (value is JsonNull || value.isJsonNull) return null
+
+        if (value is JsonNull || value.isJsonNull) {
+            return null
+        }
+
         return runCatching {
-            if (value.isJsonPrimitive) value.asString else value.toString()
+            if (value.isJsonPrimitive) {
+                value.asString
+            } else {
+                value.toString()
+            }
         }.getOrNull()
     }
 
     companion object {
+
         const val XEEV_BASE = "https://xeev.app"
+
         const val XEEV_APP_VERSION = "2.6.0"
 
+        /**
+         * XEEV playlist IDs are 32-character alphanumeric strings.
+         * They are not necessarily hexadecimal.
+         */
         fun isValidPlaylistId(value: String): Boolean =
-            value.matches(Regex("^[A-Fa-f0-9]{32}$"))
+            value.matches(
+                Regex("^[A-Za-z0-9]{32}$")
+            )
 
-        private fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(90, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
-            .callTimeout(120, TimeUnit.SECONDS)
-            .followRedirects(true)
-            .followSslRedirects(true)
-            .build()
+        private fun defaultClient(): OkHttpClient =
+            OkHttpClient.Builder()
+                .connectTimeout(20, TimeUnit.SECONDS)
+                .readTimeout(90, TimeUnit.SECONDS)
+                .writeTimeout(30, TimeUnit.SECONDS)
+                .callTimeout(120, TimeUnit.SECONDS)
+                .followRedirects(true)
+                .followSslRedirects(true)
+                .build()
     }
 }
 
