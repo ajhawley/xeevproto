@@ -52,10 +52,34 @@ class XeevRepository(
             .post(body)
             .header("Accept", "application/json")
             .build()
-        val json = executeJson(request, "XEEV pairing check")
-        val result = json.getAsJsonObject("xresult") ?: return null
-        val lineId = result.stringValue("lineid")?.trim() ?: return null
-        return lineId.takeIf(::isValidPlaylistId)
+val json = executeJson(request, "XEEV pairing check")
+
+val xresult = json.get("xresult")
+    ?: throw IOException(
+        "XEEV response has no xresult field. Fields: ${json.keySet().joinToString()}"
+    )
+
+if (xresult.isJsonNull || !xresult.isJsonObject) {
+    throw IOException("XEEV response xresult is not an object")
+}
+
+val result = xresult.asJsonObject
+
+val lineId = result.stringValue("lineid")?.trim()
+    ?: throw IOException(
+        "XEEV response has no lineid field. Fields: ${result.keySet().joinToString()}"
+    )
+
+if (lineId.isBlank() || lineId == "0") return null
+
+if (!isValidPlaylistId(lineId)) {
+    throw IOException(
+        "XEEV returned an unexpected lineid format " +
+        "(length=${lineId.length}, hexadecimal=${lineId.matches(Regex("^[A-Fa-f0-9]+$"))})"
+    )
+}
+
+return lineId
     }
 
     /** Downloads the XEEV text playlist containing the real playback links. */
