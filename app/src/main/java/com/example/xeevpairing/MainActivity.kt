@@ -36,6 +36,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.example.xeevpairing.data.PlaylistCategory
 import com.example.xeevpairing.data.TvChannel
+import com.example.xeevpairing.data.ParsedPlaylist
 import com.example.xeevpairing.data.XeevPlaylistParser
 import com.example.xeevpairing.data.XeevRepository
 import kotlinx.coroutines.Dispatchers
