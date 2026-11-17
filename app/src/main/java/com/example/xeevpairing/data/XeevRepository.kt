@@ -75,7 +75,7 @@ if (lineId.isBlank() || lineId == "0") return null
 if (!isValidPlaylistId(lineId)) {
     throw IOException(
         "XEEV returned an unexpected lineid format " +
-        "(length=${lineId.length}, hexadecimal=${lineId.matches(Regex("^[A-Fa-f0-9]+$"))})"
+        "(length=${lineId.length}, hexadecimal=${lineId.matches(Regex("^[A-Za-z0-9]+$"))})"
     )
 }
 
