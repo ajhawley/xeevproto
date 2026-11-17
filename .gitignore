@@ -1,0 +1,14 @@
+.gradle/
+.idea/
+local.properties
+**/build/
+*.iml
+.DS_Store
+*.apk
+*.aab
+*.pcap
+*.xapk
+*.m3u
+*.m3u8
+*playlist*.txt
+*playlist*.dat
