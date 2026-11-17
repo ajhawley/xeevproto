@@ -27,8 +27,12 @@ data class ParsedPlaylist(
 
 /**
  * XEEV records are tab-delimited. The #CAT and #CHAN columns below are based on
- * actual /load/apk/{playlistId} output. Unknown record types are counted but not
- * interpreted, so new/private formats are not silently mislabelled as VOD/series.
+ * the inspected /load/apk/{playlistId} output.
+ *
+ * #CHAN zero-based indexes:
+ * 0 record type, 1 record id, 2 category id, 3 name, 4 EPG id,
+ * 5 secondary/provider EPG field, 6 logo URL, 7 playback URL,
+ * 8 archive flag, 9 catch-up URL, 10 provider stream id.
  */
 object XeevPlaylistParser {
     fun parse(content: String): ParsedPlaylist {
@@ -53,26 +57,37 @@ object XeevPlaylistParser {
                         categories[id] = PlaylistCategory(id, name)
                     }
                 }
+
                 "#CHAN" -> {
-                    // Confirmed columns: record, record-id, category-id, name,
-                    // EPG id, logo URL, playback URL, archive flag, catch-up URL,
-                    // provider stream id, ...
-                    val playback = fields.getOrNull(6)?.trim().orEmpty()
+                    // Confirmed against a real record:
+                    // fields[6] = logo PNG; fields[7] = actual MPEG-TS stream URL.
+                    val playback = fields.getOrNull(7)?.trim().orEmpty()
                     val name = fields.getOrNull(3)?.trim().orEmpty()
                     val categoryId = fields.getOrNull(2)?.trim().orEmpty()
-                    if (fields.size < 7 || name.isEmpty() || categoryId.isEmpty() || !isHttpUrl(playback)) {
+
+                    if (
+                        fields.size < 8 ||
+                        name.isEmpty() ||
+                        categoryId.isEmpty() ||
+                        !isHttpUrl(playback)
+                    ) {
                         ignoredChannels++
                     } else {
                         channels += TvChannel(
                             recordId = fields.getOrNull(1)?.trim().orEmpty(),
                             categoryId = categoryId,
                             name = name.removeSuffix(" -").trim(),
-                            epgChannelId = fields.getOrNull(4)?.trim()?.takeIf { it.isNotEmpty() },
-                            logoUrl = fields.getOrNull(5)?.trim()?.takeIf(::isHttpUrl),
+                            epgChannelId = fields.getOrNull(4)?.trim()
+                                ?.takeIf { it.isNotEmpty() },
+                            logoUrl = fields.getOrNull(6)?.trim()
+                                ?.takeIf(::isHttpUrl),
                             playbackUrl = playback,
-                            archiveFlag = fields.getOrNull(7)?.trim()?.takeIf { it.isNotEmpty() },
-                            catchupUrl = fields.getOrNull(8)?.trim()?.takeIf(::isHttpUrl),
-                            providerStreamId = fields.getOrNull(9)?.trim()?.takeIf { it.isNotEmpty() }
+                            archiveFlag = fields.getOrNull(8)?.trim()
+                                ?.takeIf { it.isNotEmpty() },
+                            catchupUrl = fields.getOrNull(9)?.trim()
+                                ?.takeIf(::isHttpUrl),
+                            providerStreamId = fields.getOrNull(10)?.trim()
+                                ?.takeIf { it.isNotEmpty() }
                         )
                     }
                 }
@@ -88,5 +103,6 @@ object XeevPlaylistParser {
     }
 
     private fun isHttpUrl(value: String): Boolean =
-        value.startsWith("https://", ignoreCase = true) || value.startsWith("http://", ignoreCase = true)
+        value.startsWith("https://", ignoreCase = true) ||
+            value.startsWith("http://", ignoreCase = true)
 }
