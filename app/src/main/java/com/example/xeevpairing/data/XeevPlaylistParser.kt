@@ -1,108 +1,48 @@
 package com.example.xeevpairing.data
 
-/** Parsed, safe-to-display subset of the XEEV playlist format. */
-data class PlaylistCategory(
-    val id: String,
-    val name: String
-)
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
 
-data class TvChannel(
-    val recordId: String,
-    val categoryId: String,
-    val name: String,
-    val epgChannelId: String?,
-    val logoUrl: String?,
-    val playbackUrl: String,
-    val archiveFlag: String?,
-    val catchupUrl: String?,
-    val providerStreamId: String?
-)
+class XeevPlaylistParserTest {
+    @Test
+    fun parsesVerifiedCategoryAndChannelFields() {
+        val playlist = listOf(
+            "#PL\t172349\tplaylist\t1234\t0\t0\thttp://x3m.li\t0123456789ABCDEF\t0123456789ABCDEF",
+            "#CAT\t15032989\tUK | ENTERTAINMENT\t0\t0\t0",
+            // Verified XEEV #CHAN layout:
+            // index 5 = secondary EPG/provider field, 6 = logo, 7 = stream,
+            // 8 = archive flag, 9 = catch-up URL, 10 = provider stream ID.
+            "#CHAN\t2784342685\t15032989\tUK FHD  BBC ONE - \t0\tBBC1\thttps://logos.example/bbc.png\thttps://strike.example:2096/token/99999\t0\t\t99999\t0\t1794867253",
+            "#CHAN\t2784342686\t15032989\tUK HD : BBC 1 - \t0\tBBC1.uk\thttps://logos.example/bbc.png\thttps://strike.example:2096/token/4244\t5\thttps://strike.example:2096/timeshift/token/[d]/[t]/4244.ts\t4244\t0\t1794867253"
+        ).joinToString("\n")
 
-data class ParsedPlaylist(
-    val categories: List<PlaylistCategory>,
-    val channels: List<TvChannel>,
-    val recordCounts: Map<String, Int>,
-    val ignoredChannelRecords: Int
-)
+        val parsed = XeevPlaylistParser.parse(playlist)
 
-/**
- * XEEV records are tab-delimited. The #CAT and #CHAN columns below are based on
- * the inspected /load/apk/{playlistId} output.
- *
- * #CHAN zero-based indexes:
- * 0 record type, 1 record id, 2 category id, 3 name, 4 EPG id,
- * 5 secondary/provider EPG field, 6 logo URL, 7 playback URL,
- * 8 archive flag, 9 catch-up URL, 10 provider stream id.
- */
-object XeevPlaylistParser {
-    fun parse(content: String): ParsedPlaylist {
-        val categories = LinkedHashMap<String, PlaylistCategory>()
-        val channels = ArrayList<TvChannel>()
-        val counts = LinkedHashMap<String, Int>()
-        var ignoredChannels = 0
-
-        content.lineSequence().forEach { rawLine ->
-            val line = rawLine.removePrefix("\uFEFF").trimEnd('\r')
-            if (line.isBlank() || !line.startsWith('#')) return@forEach
-            val fields = line.split('\t')
-            val recordType = fields.firstOrNull()?.trim().orEmpty()
-            if (recordType.isBlank()) return@forEach
-            counts[recordType] = (counts[recordType] ?: 0) + 1
-
-            when (recordType) {
-                "#CAT" -> {
-                    val id = fields.getOrNull(1)?.trim().orEmpty()
-                    val name = fields.getOrNull(2)?.trim().orEmpty()
-                    if (id.isNotEmpty() && name.isNotEmpty()) {
-                        categories[id] = PlaylistCategory(id, name)
-                    }
-                }
-
-                "#CHAN" -> {
-                    // Confirmed against a real record:
-                    // fields[6] = logo PNG; fields[7] = actual MPEG-TS stream URL.
-                    val playback = fields.getOrNull(7)?.trim().orEmpty()
-                    val name = fields.getOrNull(3)?.trim().orEmpty()
-                    val categoryId = fields.getOrNull(2)?.trim().orEmpty()
-
-                    if (
-                        fields.size < 8 ||
-                        name.isEmpty() ||
-                        categoryId.isEmpty() ||
-                        !isHttpUrl(playback)
-                    ) {
-                        ignoredChannels++
-                    } else {
-                        channels += TvChannel(
-                            recordId = fields.getOrNull(1)?.trim().orEmpty(),
-                            categoryId = categoryId,
-                            name = name.removeSuffix(" -").trim(),
-                            epgChannelId = fields.getOrNull(4)?.trim()
-                                ?.takeIf { it.isNotEmpty() },
-                            logoUrl = fields.getOrNull(6)?.trim()
-                                ?.takeIf(::isHttpUrl),
-                            playbackUrl = playback,
-                            archiveFlag = fields.getOrNull(8)?.trim()
-                                ?.takeIf { it.isNotEmpty() },
-                            catchupUrl = fields.getOrNull(9)?.trim()
-                                ?.takeIf(::isHttpUrl),
-                            providerStreamId = fields.getOrNull(10)?.trim()
-                                ?.takeIf { it.isNotEmpty() }
-                        )
-                    }
-                }
-            }
-        }
-
-        return ParsedPlaylist(
-            categories = categories.values.toList(),
-            channels = channels,
-            recordCounts = counts,
-            ignoredChannelRecords = ignoredChannels
-        )
+        assertEquals(1, parsed.categories.size)
+        assertEquals("UK | ENTERTAINMENT", parsed.categories.single().name)
+        assertEquals(2, parsed.channels.size)
+        assertEquals("UK FHD  BBC ONE", parsed.channels.first().name)
+        assertEquals("https://logos.example/bbc.png", parsed.channels.first().logoUrl)
+        assertEquals("https://strike.example:2096/token/99999", parsed.channels.first().playbackUrl)
+        assertTrue(parsed.channels.last().catchupUrl?.contains("timeshift") == true)
+        assertEquals("99999", parsed.channels.first().providerStreamId)
+        assertEquals(1, parsed.recordCounts["#CAT"])
+        assertEquals(2, parsed.recordCounts["#CHAN"])
     }
 
-    private fun isHttpUrl(value: String): Boolean =
-        value.startsWith("https://", ignoreCase = true) ||
-            value.startsWith("http://", ignoreCase = true)
+    @Test
+    fun ignoresMalformedChannelRecordsAndCountsUnknownRecords() {
+        val playlist = listOf(
+            "#CAT\t1\tTest Category",
+            "#CHAN\tbroken",
+            "#UNKNOWN\tanything"
+        ).joinToString("\n")
+
+        val parsed = XeevPlaylistParser.parse(playlist)
+
+        assertTrue(parsed.channels.isEmpty())
+        assertEquals(1, parsed.ignoredChannelRecords)
+        assertEquals(1, parsed.recordCounts["#UNKNOWN"])
+    }
 }
