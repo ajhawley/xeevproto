@@ -34,7 +34,8 @@ object XmlTvParser {
         require(xml.isNotBlank()) { "The EPG response was empty" }
         val factory = SAXParserFactory.newInstance().apply {
             isNamespaceAware = false
-            isXIncludeAware = false
+            // Android's SAX implementation may reject this optional setting.
+            // XMLTV does not require XInclude; its default is already disabled.
             setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
             setFeature("http://xml.org/sax/features/external-general-entities", false)
             setFeature("http://xml.org/sax/features/external-parameter-entities", false)
