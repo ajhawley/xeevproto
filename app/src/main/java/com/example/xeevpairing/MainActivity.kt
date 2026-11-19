@@ -3,6 +3,7 @@ package com.example.xeevpairing
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -133,6 +134,8 @@ private fun XeevTvApp(
     var showPairing by remember {
         mutableStateOf(initialAppCode.isNullOrBlank() || initialPlaylistId.isNullOrBlank())
     }
+    var isFullScreen by remember { mutableStateOf(false) }
+    BackHandler(enabled = isFullScreen) { isFullScreen = false }
 
     fun changeFormat(value: String) {
         playlistFormat = value
@@ -267,7 +270,9 @@ private fun XeevTvApp(
                             isBusy = false
                         }
                     },
-                    isBusy = isBusy
+                    isBusy = isBusy,
+                    isFullScreen = isFullScreen,
+                    onToggleFullScreen = { isFullScreen = !isFullScreen }
                 )
             } else {
                 PairingScreen(
@@ -374,22 +379,22 @@ private fun PairingScreen(
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     Row(
-        Modifier.fillMaxSize().padding(28.dp),
-        horizontalArrangement = Arrangement.spacedBy(24.dp),
+        Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
             Text("XEEV TV", color = Accent, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
-            Text("Connect your playlist", color = TextPrimary, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+            Text("Connect your playlist", color = TextPrimary, fontSize = 23.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(10.dp))
             Text(
                 "Create an app code, pair it on the XEEV website, then load either the XEEV or standard M3U playlist.",
-                color = TextMuted, fontSize = 15.sp
+                color = TextMuted, fontSize = 12.sp
             )
             Spacer(Modifier.height(18.dp))
             Text("PLAYLIST FORMAT", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 FilterChip(
                     selected = playlistFormat == FORMAT_XEEV,
                     onClick = { onFormatChanged(FORMAT_XEEV) },
@@ -414,7 +419,7 @@ private fun PairingScreen(
                 Button(onClick = onRegister, enabled = !isBusy) { Text("Create app code") }
             } else {
                 Text("APP CODE", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                Text(appCode, color = TextPrimary, fontSize = 36.sp, fontWeight = FontWeight.ExtraBold)
+                Text(appCode, color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = onCheckPairing, enabled = !isBusy) { Text("Check pairing") }
@@ -454,20 +459,20 @@ private fun PairingScreen(
         }
 
         Card(
-            Modifier.width(260.dp),
+            Modifier.width(190.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
             shape = RoundedCornerShape(18.dp)
         ) {
             Column(
-                Modifier.padding(14.dp).fillMaxWidth(),
+                Modifier.padding(10.dp).fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 if (qrUrl.isNotBlank()) {
-                    AsyncImage(model = qrUrl, contentDescription = "XEEV app code QR image", modifier = Modifier.size(220.dp))
+                    AsyncImage(model = qrUrl, contentDescription = "XEEV app code QR image", modifier = Modifier.size(156.dp))
                 } else {
                     Box(
-                        Modifier.size(220.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFFE9EDF3)),
+                        Modifier.size(156.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFFE9EDF3)),
                         contentAlignment = Alignment.Center
                     ) { Text("XEEV QR", color = Color.DarkGray, fontWeight = FontWeight.Bold) }
                 }
@@ -494,7 +499,9 @@ private fun TvHomeScreen(
     onSearchChanged: (String) -> Unit,
     onOpenPairing: () -> Unit,
     onRefresh: () -> Unit,
-    isBusy: Boolean
+    isBusy: Boolean,
+    isFullScreen: Boolean,
+    onToggleFullScreen: () -> Unit
 ) {
     val clipboard = LocalClipboardManager.current
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -512,14 +519,20 @@ private fun TvHomeScreen(
         }
     }
 
+    val playerUiState = rememberTvPlayer(selectedChannel)
+    if (isFullScreen && selectedChannel != null && playerUiState != null) {
+        Box(Modifier.fillMaxSize().background(Color.Black)) {
+            TvPlayer(playerUiState, true, onToggleFullScreen, Modifier.fillMaxSize())
+        }
+    } else {
     Column(Modifier.fillMaxSize().background(AppBackground)) {
         Row(
-            Modifier.fillMaxWidth().height(64.dp).background(PanelBackground).padding(horizontal = 22.dp),
+            Modifier.fillMaxWidth().height(48.dp).background(PanelBackground).padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("XEEV", color = Accent, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+            Text("XEEV", color = Accent, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
             Spacer(Modifier.width(10.dp))
-            Text("TV", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Light)
+            Text("TV", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Light)
             Spacer(Modifier.width(24.dp))
             Text("LIVE · ${playlistFormat.uppercase()}", color = Accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
@@ -529,10 +542,10 @@ private fun TvHomeScreen(
             TextButton(onClick = onOpenPairing) { Text("Pairing") }
         }
         if (isBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
-        Row(Modifier.fillMaxSize().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxSize().padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Column(
-                Modifier.width(205.dp).fillMaxHeight().clip(RoundedCornerShape(12.dp))
-                    .background(PanelBackground).padding(10.dp)
+                Modifier.weight(0.22f).widthIn(min = 140.dp, max = 215.dp).fillMaxHeight().clip(RoundedCornerShape(12.dp))
+                    .background(PanelBackground).padding(8.dp)
             ) {
                 Text("CATEGORIES", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
@@ -550,8 +563,8 @@ private fun TvHomeScreen(
                 }
             }
             Column(
-                Modifier.width(310.dp).fillMaxHeight().clip(RoundedCornerShape(12.dp))
-                    .background(PanelBackground).padding(10.dp)
+                Modifier.weight(0.30f).widthIn(min = 185.dp, max = 300.dp).fillMaxHeight().clip(RoundedCornerShape(12.dp))
+                    .background(PanelBackground).padding(8.dp)
             ) {
                 Text("CHANNELS", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(6.dp))
@@ -575,7 +588,7 @@ private fun TvHomeScreen(
                 }
             }
             Column(
-                Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(12.dp))
+                Modifier.weight(0.48f).fillMaxHeight().clip(RoundedCornerShape(12.dp))
                     .background(PanelBackground).padding(12.dp)
             ) {
                 if (selectedChannel == null) {
@@ -583,9 +596,11 @@ private fun TvHomeScreen(
                         Text("Choose a channel to start watching", color = TextMuted, fontSize = 17.sp)
                     }
                 } else {
-                    Text(selectedChannel.name, color = TextPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(selectedChannel.name, color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.height(8.dp))
-                    TvPlayer(selectedChannel, Modifier.weight(1f).fillMaxWidth())
+                    if (playerUiState != null) {
+                        TvPlayer(playerUiState, false, onToggleFullScreen, Modifier.weight(1f).fillMaxWidth())
+                    }
                     Spacer(Modifier.height(6.dp))
                     EpgProgrammePanel(
                         channel = selectedChannel,
@@ -625,6 +640,7 @@ private fun TvHomeScreen(
                 Text(status, color = TextMuted, fontSize = 10.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
+    }
     }
 }
 
@@ -678,7 +694,7 @@ private fun CategoryRow(name: String, count: Int, selected: Boolean, onClick: ()
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
             .background(if (selected) Color(0xFF254337) else Color.Transparent)
-            .clickable(onClick = onClick).focusable().padding(horizontal = 9.dp, vertical = 10.dp),
+            .clickable(onClick = onClick).focusable().padding(horizontal = 7.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(name, Modifier.weight(1f), color = if (selected) Accent else TextPrimary, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -691,13 +707,13 @@ private fun ChannelRow(channel: TvChannel, selected: Boolean, onClick: () -> Uni
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
             .background(if (selected) Color(0xFF26364A) else Color.Transparent)
-            .clickable(onClick = onClick).focusable().padding(8.dp),
+            .clickable(onClick = onClick).focusable().padding(6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (!channel.logoUrl.isNullOrBlank()) {
-            AsyncImage(model = channel.logoUrl, contentDescription = null, modifier = Modifier.size(34.dp).clip(RoundedCornerShape(6.dp)))
+            AsyncImage(model = channel.logoUrl, contentDescription = null, modifier = Modifier.size(28.dp).clip(RoundedCornerShape(6.dp)))
         } else {
-            Box(Modifier.size(34.dp).clip(RoundedCornerShape(6.dp)).background(PanelRaised), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(28.dp).clip(RoundedCornerShape(6.dp)).background(PanelRaised), contentAlignment = Alignment.Center) {
                 Text(channel.name.take(1), color = Accent, fontWeight = FontWeight.Bold)
             }
         }
@@ -710,91 +726,79 @@ private fun ChannelRow(channel: TvChannel, selected: Boolean, onClick: () -> Uni
     }
 }
 
+private data class TvPlayerUiState(val player: ExoPlayer, val playerError: String?, val playerStatus: String, val trackStatus: String)
 @Composable
 @OptIn(androidx.media3.common.util.UnstableApi::class)
-private fun TvPlayer(channel: TvChannel, modifier: Modifier = Modifier) {
+private fun rememberTvPlayer(channel: TvChannel?): TvPlayerUiState? {
     val context = LocalContext.current
-    var playerError by remember(channel.playbackUrl) { mutableStateOf<String?>(null) }
-    var playerStatus by remember(channel.playbackUrl) { mutableStateOf("Preparing MPEG-TS stream…") }
-    var trackStatus by remember(channel.playbackUrl) { mutableStateOf("Waiting for audio/video tracks") }
-    val player = remember(channel.playbackUrl) {
-        val dataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("XeevTV/1.0 (Android)")
-            .setDefaultRequestProperties(mapOf("Accept" to "*/*"))
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(20_000)
-            .setReadTimeoutMs(30_000)
-        val mediaItem = MediaItem.Builder().setUri(channel.playbackUrl).setMimeType(MimeTypes.VIDEO_MP2T).build()
-        val mediaSource = ProgressiveMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
-        ExoPlayer.Builder(context).build().apply {
-            addListener(object : Player.Listener {
-                override fun onPlaybackStateChanged(playbackState: Int) {
-                    playerStatus = when (playbackState) {
-                        Player.STATE_IDLE -> "Idle"
-                        Player.STATE_BUFFERING -> "Buffering stream…"
-                        Player.STATE_READY -> "Player ready"
-                        Player.STATE_ENDED -> "Stream ended"
-                        else -> "Player state: $playbackState"
+    var playerError by remember(channel?.playbackUrl) { mutableStateOf<String?>(null) }
+    var playerStatus by remember(channel?.playbackUrl) { mutableStateOf(if (channel == null) "No channel selected" else "Preparing MPEG-TS stream…") }
+    var trackStatus by remember(channel?.playbackUrl) { mutableStateOf("Waiting for audio/video tracks") }
+    val player = remember(channel?.playbackUrl) {
+        channel?.let { selectedChannel ->
+            val dataSourceFactory = DefaultHttpDataSource.Factory().setUserAgent("XeevTV/1.0 (Android)")
+                .setDefaultRequestProperties(mapOf("Accept" to "*/*")).setAllowCrossProtocolRedirects(true)
+                .setConnectTimeoutMs(20_000).setReadTimeoutMs(30_000)
+            val mediaItem = MediaItem.Builder().setUri(selectedChannel.playbackUrl).setMimeType(MimeTypes.VIDEO_MP2T).build()
+            val mediaSource = ProgressiveMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
+            ExoPlayer.Builder(context).build().apply {
+                addListener(object : Player.Listener {
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        playerStatus = when (playbackState) {
+                            Player.STATE_IDLE -> "Idle"
+                            Player.STATE_BUFFERING -> "Buffering stream…"
+                            Player.STATE_READY -> "Player ready"
+                            Player.STATE_ENDED -> "Stream ended"
+                            else -> "Player state: $playbackState"
+                        }
                     }
-                }
-                override fun onTracksChanged(tracks: Tracks) {
-                    val hasVideo = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO }
-                    val hasAudio = tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO }
-                    trackStatus = when {
-                        hasVideo && hasAudio -> "Video and audio tracks detected"
-                        hasVideo -> "Video track detected · no audio track detected"
-                        hasAudio -> "Audio track detected · no video track detected"
-                        else -> "No audio/video tracks detected yet"
+                    override fun onTracksChanged(tracks: Tracks) {
+                        val hasVideo = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO }
+                        val hasAudio = tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO }
+                        trackStatus = when {
+                            hasVideo && hasAudio -> "Video and audio tracks detected"
+                            hasVideo -> "Video track detected · no audio track detected"
+                            hasAudio -> "Audio track detected · no video track detected"
+                            else -> "No audio/video tracks detected yet"
+                        }
                     }
-                }
-                override fun onPlayerError(error: PlaybackException) {
-                    val detail = error.message ?: error.cause?.message
-                    playerError = if (detail.isNullOrBlank()) error.errorCodeName else "${error.errorCodeName}: $detail"
-                    playerStatus = "Playback failed"
-                }
-            })
-            setMediaSource(mediaSource)
-            playWhenReady = true
-            prepare()
+                    override fun onPlayerError(error: PlaybackException) {
+                        val detail = error.message ?: error.cause?.message
+                        playerError = if (detail.isNullOrBlank()) error.errorCodeName else "${error.errorCodeName}: $detail"
+                        playerStatus = "Playback failed"
+                    }
+                })
+                setMediaSource(mediaSource); playWhenReady = true; prepare()
+            }
         }
     }
-    DisposableEffect(player) { onDispose { player.release() } }
+    DisposableEffect(player) { onDispose { player?.release() } }
+    return player?.let { TvPlayerUiState(it, playerError, playerStatus, trackStatus) }
+}
+@Composable
+@OptIn(androidx.media3.common.util.UnstableApi::class)
+private fun TvPlayer(uiState: TvPlayerUiState, isFullScreen: Boolean, onToggleFullScreen: () -> Unit, modifier: Modifier = Modifier) {
+    val player = uiState.player
     Box(modifier.background(Color.Black), contentAlignment = Alignment.Center) {
-        AndroidView(
-            factory = { viewContext ->
-                PlayerView(viewContext).apply {
-                    this.player = player
-                    useController = true
-                    keepScreenOn = true
-                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    setUseArtwork(false)
-                    setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
-                }
-            },
-            update = {
-                it.player = player
-                it.setUseArtwork(false)
-            },
-            modifier = Modifier.fillMaxSize()
-        )
-        Column(
-            Modifier.align(Alignment.BottomStart).fillMaxWidth()
-                .background(Color(0xB8000000)).padding(horizontal = 9.dp, vertical = 6.dp)
-        ) {
-            if (playerError != null) {
-                Text("PLAYBACK ERROR: $playerError", color = Color(0xFFFFB4AB), fontSize = 10.sp, maxLines = 3)
-                TextButton(
-                    onClick = {
-                        playerError = null
-                        playerStatus = "Retrying stream…"
-                        player.seekToDefaultPosition()
-                        player.prepare()
-                        player.playWhenReady = true
-                    },
-                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
-                ) { Text("Retry playback", fontSize = 10.sp) }
-            } else Text(playerStatus, color = Color.White, fontSize = 10.sp, maxLines = 1)
-            Text(trackStatus, color = Color(0xFFD0D8E4), fontSize = 9.sp, maxLines = 1)
+        AndroidView(factory = { viewContext ->
+            PlayerView(viewContext).apply {
+                this.player = player; useController = true; keepScreenOn = true
+                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT; setUseArtwork(false)
+                setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
+            }
+        }, update = { it.player = player; it.setUseArtwork(false) }, modifier = Modifier.fillMaxSize())
+        if (isFullScreen) {
+            Button(onClick = onToggleFullScreen, modifier = Modifier.align(Alignment.TopStart).padding(12.dp)) { Text("Back to Live TV") }
+        } else {
+            OutlinedButton(onClick = onToggleFullScreen, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)) { Text("Full screen") }
+        }
+        Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().background(Color(0xB8000000)).padding(horizontal = 9.dp, vertical = 6.dp)) {
+            if (uiState.playerError != null) {
+                Text("PLAYBACK ERROR: ${uiState.playerError}", color = Color(0xFFFFB4AB), fontSize = 10.sp, maxLines = 3)
+                TextButton(onClick = { player.seekToDefaultPosition(); player.prepare(); player.playWhenReady = true },
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)) { Text("Retry playback", fontSize = 10.sp) }
+            } else Text(uiState.playerStatus, color = Color.White, fontSize = 10.sp, maxLines = 1)
+            Text(uiState.trackStatus, color = Color(0xFFD0D8E4), fontSize = 9.sp, maxLines = 1)
         }
     }
 }
