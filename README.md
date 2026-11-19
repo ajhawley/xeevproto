@@ -327,16 +327,3 @@ gradle wrapper --gradle-version 8.9
 
 The GitHub Actions workflow builds `assembleDebug` and uploads the debug APK as a workflow artifact.
 
-## Project direction
-
-The protocol investigation is the primary deliverable. Keep the Android UI as a compact test harness; do not grow it into a feature-rich IPTV player.
-
-After this README is agreed, the next UI pass should focus on:
-
-- Locking the app to landscape on phones/tablets.
-- Making the pairing/login screen more compact so controls and QR fit comfortably.
-- Reducing excessive typography, spacing and fixed-width assumptions.
-- Making the channel/category/player layout adapt to available landscape width.
-- Keeping Android TV/D-pad use functional where practical.
-
-The UI should make protocol testing easy, not become the project itself.
